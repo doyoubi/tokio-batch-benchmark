@@ -6,4 +6,12 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name="redis-ping-pong-server"
+path="src/main.rs"
+
 [dependencies]
+bytes = "0.4.12"
+tokio = "0.2.0-alpha.6"
+tokio-batch = { git = "https://github.com/doyoubi/tokio-batch", branch = "ReplaceTimer" }
+futures-preview = { version = "0.3.0-alpha.19" }
