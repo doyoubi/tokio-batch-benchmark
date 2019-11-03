@@ -224,6 +224,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut batch = stream::iter(reqs.into_iter());
                     if let Err(err) = writer.send_all(&mut batch).await {
                         println!("writer error: {}", err);
+                        break;
                     }
                 }
                 println!("writer closed");
