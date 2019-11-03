@@ -44,7 +44,7 @@ impl Decoder for RedisPingPongCodec {
         if buf.len() < len {
             return Ok(None)
         }
-        let _data = buf.split_to(PING_PACKET.len());
+        let _data = buf.split_to(len);
         Ok(Some(()))
     }
 }
@@ -113,7 +113,7 @@ impl StatsStrategy for LogStats {
     }
 }
 
-fn wrap_stream<S>(s: S, mode: BatchMode, stats: Arc<Stats>, min_timeout: u64, max_timeout: u64) -> Box<dyn Stream<Item = Vec<()>> + Send + 'static + Unpin>
+fn wrap_stream<S>(s: S, mode: BatchMode, stats: Arc<Stats>, buf_len: usize, min_timeout: u64, max_timeout: u64) -> Box<dyn Stream<Item = Vec<()>> + Send + 'static + Unpin>
     where S: Stream<Item = ()> + Send + 'static + Unpin
 {
     match mode {
@@ -122,7 +122,7 @@ fn wrap_stream<S>(s: S, mode: BatchMode, stats: Arc<Stats>, min_timeout: u64, ma
             Box::new(
                 ChunksTimeout::with_stats(
                     s,
-                    10,
+                    buf_len,
                     None,
                     Duration::from_micros(max_timeout),
                     LogStats::new(stats),
@@ -133,7 +133,7 @@ fn wrap_stream<S>(s: S, mode: BatchMode, stats: Arc<Stats>, min_timeout: u64, ma
             Box::new(
                 ChunksTimeout::with_stats(
                     s,
-                    10,
+                    buf_len,
                     Some(Duration::from_micros(min_timeout)),
                     Duration::from_micros(max_timeout),
                     LogStats::new(stats),
@@ -165,6 +165,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .value_name("MAX")
             .help("maximum timeout, works for max and minmax mode")
             .takes_value(true))
+        .arg(Arg::with_name("buf")
+            .long("buf")
+            .value_name("BUF")
+            .help("batch buffer size")
+            .takes_value(true))
         .get_matches();
     let mode = match matches.value_of("mode").unwrap_or("nobatch") {
         "max" => BatchMode::MaxTimer,
@@ -173,7 +178,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let min_timeout = value_t!(matches.value_of("min"), u64).unwrap_or(10);
     let max_timeout = value_t!(matches.value_of("max"), u64).unwrap_or(500);
-    println!("mode: {:?} min timeout: {} max timeout: {}", mode, min_timeout, max_timeout);
+    let buf_len = value_t!(matches.value_of("buf"), usize).unwrap_or(50);
+    println!("mode: {:?} buf: {} min timeout: {} max timeout: {}", mode, buf_len, min_timeout, max_timeout);
 
     let stats = Arc::new(Stats::new());
     let stats_clone = stats.clone();
@@ -197,7 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let (mut writer, mut reader) = RedisPingPongCodec.framed(socket).split();
             let (mut tx, rx) = mpsc::unbounded();
 
-            let mut rx = wrap_stream(rx, mode, stats_clone, min_timeout, max_timeout);
+            let mut rx = wrap_stream(rx, mode, stats_clone, buf_len, min_timeout, max_timeout);
 
             let reader_handler = async move {
                 while let Some(res) = reader.next().await {
