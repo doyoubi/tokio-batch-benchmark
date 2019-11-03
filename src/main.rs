@@ -210,7 +210,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         socket.set_nodelay(true)?;
 
         tokio::spawn(async move {
-            let (mut writer, reader) = RedisPingPongCodec.framed(socket).split();
+            let (writer, reader) = RedisPingPongCodec.framed(socket).split();
+            let mut writer = writer.buffer(buf_len);
             let mut reader = wrap_stream(reader, mode, stats_clone, buf_len, min_timeout, max_timeout);
 
             let handler = async move {
