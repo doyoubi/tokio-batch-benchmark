@@ -522,7 +522,7 @@ dependencies = [
 [[package]]
 name = "tokio-batch"
 version = "0.4.0"
-source = "git+https://github.com/doyoubi/tokio-batch?branch=ReplaceTimerDev#600fd6126fbdf2ed02fad5def8a17ab421ef8d01"
+source = "git+https://github.com/doyoubi/tokio-batch?branch=ReplaceTimerDev#97fec966a65480a9168152f806c41b7de83bed8e"
 dependencies = [
  "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-timer 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",

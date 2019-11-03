@@ -62,6 +62,7 @@ struct Stats {
     full: AtomicUsize,
     min: AtomicUsize,
     max: AtomicUsize,
+    last: AtomicUsize,
     flush_count: AtomicUsize,
     flush_size: AtomicUsize,
 }
@@ -72,6 +73,7 @@ impl Stats {
             full: AtomicUsize::new(0),
             min: AtomicUsize::new(0),
             max: AtomicUsize::new(0),
+            last: AtomicUsize::new(0),
             flush_count: AtomicUsize::new(0),
             flush_size: AtomicUsize::new(0),
         }
@@ -83,10 +85,11 @@ impl Stats {
         let full = self.full.load(Ordering::SeqCst);
         let min = self.min.load(Ordering::SeqCst);
         let max = self.max.load(Ordering::SeqCst);
+        let last = self.last.load(Ordering::SeqCst);
         let sum: f64 = flush_size.into();
         let count: f64 = flush_count.into();
         let aver: f64 = if count == 0.0 { 0.0 } else { sum / count };
-        println!("average flush size: {} full: {} min: {} max: {}", aver, full, min, max);
+        println!("average flush size: {} full: {} min: {} max: {} last {}", aver, full, min, max, last);
     }
 }
 
@@ -106,6 +109,7 @@ impl StatsStrategy for LogStats {
             FlushEvent::Full => self.stats.full.fetch_add(1, Ordering::SeqCst),
             FlushEvent::MinTimeoutTimer => self.stats.min.fetch_add(1, Ordering::SeqCst),
             FlushEvent::MaxTimeoutTimer => self.stats.max.fetch_add(1, Ordering::SeqCst),
+            FlushEvent::Last => self.stats.last.fetch_add(1, Ordering::SeqCst),
         };
         self.stats.flush_count.fetch_add(1, Ordering::SeqCst);
         self.stats.flush_size.fetch_add(batch_size, Ordering::SeqCst);
