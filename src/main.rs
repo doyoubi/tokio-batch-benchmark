@@ -4,7 +4,6 @@ use clap::{Arg, App};
 use tokio::net::TcpListener;
 use tokio::codec::{Decoder, Encoder};
 use tokio::prelude::*;
-use futures::channel::mpsc;
 use futures::{stream, Stream};
 use futures_timer::Delay;
 use bytes::BytesMut;
@@ -113,8 +112,8 @@ impl StatsStrategy for LogStats {
     }
 }
 
-fn wrap_stream<S>(s: S, mode: BatchMode, stats: Arc<Stats>, buf_len: usize, min_timeout: u64, max_timeout: u64) -> Box<dyn Stream<Item = Vec<()>> + Send + 'static + Unpin>
-    where S: Stream<Item = ()> + Send + 'static + Unpin
+fn wrap_stream<S>(s: S, mode: BatchMode, stats: Arc<Stats>, buf_len: usize, min_timeout: u64, max_timeout: u64) -> Box<dyn Stream<Item = Vec<S::Item>> + Send + 'static + Unpin>
+    where S: Stream + Send + 'static + Unpin, S::Item: Send + 'static
 {
     match mode {
         BatchMode::NoBatch => Box::new(s.map(|item| vec![item])),
@@ -200,38 +199,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (socket, _) = listener.accept().await?;
 
         tokio::spawn(async move {
-            let (mut writer, mut reader) = RedisPingPongCodec.framed(socket).split();
-            let (mut tx, rx) = mpsc::unbounded();
+            let (mut writer, reader) = RedisPingPongCodec.framed(socket).split();
+            let mut reader = wrap_stream(reader, mode, stats_clone, buf_len, min_timeout, max_timeout);
 
-            let mut rx = wrap_stream(rx, mode, stats_clone, buf_len, min_timeout, max_timeout);
-
-            let reader_handler = async move {
+            let handler = async move {
                 while let Some(res) = reader.next().await {
-                    if let Err(err) = res {
-                        println!("reader error: {}", err);
-                        break;
+                    let mut reqs = Vec::new();
+                    for r in res.into_iter() {
+                        match r {
+                            Ok(req) => reqs.push(req),
+                            Err(err) => {
+                                println!("reader error: {}", err);
+                                return;
+                            }
+                        }
                     }
-                    if let Err(err) = tx.send(()).await {
-                        println!("tx error: {}", err);
-                        break;
-                    }
-                }
-                println!("reader closed");
-            };
-
-            let writer_handler = async move {
-                while let Some(reqs) = rx.next().await {
                     let mut batch = stream::iter(reqs.into_iter());
                     if let Err(err) = writer.send_all(&mut batch).await {
                         println!("writer error: {}", err);
                         break;
                     }
                 }
-                println!("writer closed");
             };
-
-            tokio::spawn(writer_handler);
-            tokio::spawn(reader_handler);
+            tokio::spawn(handler);
             println!("spawn new connection");
         });
     }
