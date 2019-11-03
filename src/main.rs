@@ -169,6 +169,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .value_name("BUF")
             .help("batch buffer size")
             .takes_value(true))
+        .arg(Arg::with_name("address")
+            .long("address")
+            .value_name("ADDRESS")
+            .help("listening address")
+            .takes_value(true))
         .get_matches();
     let mode = match matches.value_of("mode").unwrap_or("nobatch") {
         "max" => BatchMode::MaxTimer,
@@ -178,7 +183,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let min_timeout = value_t!(matches.value_of("min"), u64).unwrap_or(10);
     let max_timeout = value_t!(matches.value_of("max"), u64).unwrap_or(500);
     let buf_len = value_t!(matches.value_of("buf"), usize).unwrap_or(50);
-    println!("mode: {:?} buf: {} min timeout: {} max timeout: {}", mode, buf_len, min_timeout, max_timeout);
+    let address = matches.value_of("address").unwrap_or("127.0.0.1:6379");
+    println!("address: {} mode: {:?} buf: {} min timeout: {} max timeout: {}", address, mode, buf_len, min_timeout, max_timeout);
 
     let stats = Arc::new(Stats::new());
     let stats_clone = stats.clone();
@@ -192,7 +198,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    let addr = "127.0.0.1:6379".parse::<SocketAddr>()?;
+    let addr = address.parse::<SocketAddr>()?;
     let mut listener = TcpListener::bind(&addr).await?;
     loop {
         let stats_clone = stats.clone();
