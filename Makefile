@@ -1,8 +1,14 @@
 build:
 	cargo build --release
 
-run:
+nobatch:
 	target/release/redis-ping-pong-server
+
+max:
+	target/release/redis-ping-pong-server -m max --max 500
+
+minmax:
+	target/release/redis-ping-pong-server -m max --min 10 --max 500
 
 build-debug:
 	cargo build
