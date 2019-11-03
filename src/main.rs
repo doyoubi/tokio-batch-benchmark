@@ -203,6 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let stats_clone = stats.clone();
         let (socket, _) = listener.accept().await?;
+        socket.set_nodelay(true)?;
 
         tokio::spawn(async move {
             let (mut writer, reader) = RedisPingPongCodec.framed(socket).split();
