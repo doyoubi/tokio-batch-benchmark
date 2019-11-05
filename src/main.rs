@@ -1,5 +1,8 @@
 #[macro_use]
 extern crate clap;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 use clap::{Arg, App};
 use tokio::net::TcpListener;
 use tokio::codec::{Decoder, Encoder};
@@ -13,6 +16,9 @@ use tokio_batch::{ChunksTimeout, StatsStrategy, FlushEvent};
 use std::time::Duration;
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicUsize};
+
+mod bilock;
+mod split;
 
 const PING_PACKET: &'static str = "*1\r\n$4\r\nPING\r\n";
 const PING_INLINE_PACKET: &'static str = "PING\r\n";
@@ -89,7 +95,7 @@ impl Stats {
         let sum: f64 = flush_size.into();
         let count: f64 = flush_count.into();
         let aver: f64 = if count == 0.0 { 0.0 } else { sum / count };
-        println!("average flush size: {} full: {} min: {} max: {} last {}", aver, full, min, max, last);
+        info!("average flush size: {} full: {} min: {} max: {} last {}", aver, full, min, max, last);
     }
 }
 
@@ -148,6 +154,8 @@ fn wrap_stream<S>(s: S, mode: BatchMode, stats: Arc<Stats>, buf_len: usize, min_
 
 #[tokio::main(single_thread)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+
     let matches = App::new("redis-ping-pong-server")
         .version("1.0")
         .author("doyoubi <doyoubihgx@gmail.com>")
@@ -188,7 +196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let max_timeout = value_t!(matches.value_of("max"), u64).unwrap_or(500);
     let buf_len = value_t!(matches.value_of("buf"), usize).unwrap_or(50);
     let address = matches.value_of("address").unwrap_or("127.0.0.1:6379");
-    println!("address: {} mode: {:?} buf: {} min timeout: {} max timeout: {}", address, mode, buf_len, min_timeout, max_timeout);
+    info!("address: {} mode: {:?} buf: {} min timeout: {} max timeout: {}", address, mode, buf_len, min_timeout, max_timeout);
 
     let stats = Arc::new(Stats::new());
     let stats_clone = stats.clone();
@@ -210,7 +218,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         socket.set_nodelay(true)?;
 
         tokio::spawn(async move {
-            let (writer, reader) = RedisPingPongCodec.framed(socket).split();
+            let frame = RedisPingPongCodec.framed(socket);
+            // To support batching, we need to use our customized `split`: https://github.com/rust-lang-nursery/futures-rs/issues/1940
+            // let (writer, reader) = frame.split();
+            let (writer, reader) = split::split(frame);
             let mut writer = writer.buffer(buf_len);
             let mut reader = wrap_stream(reader, mode, stats_clone, buf_len, min_timeout, max_timeout);
 
@@ -221,20 +232,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match r {
                             Ok(req) => reqs.push(req),
                             Err(err) => {
-                                println!("reader error: {}", err);
+                                error!("reader error: {}", err);
                                 return;
                             }
                         }
                     }
                     let mut batch = stream::iter(reqs.into_iter());
                     if let Err(err) = writer.send_all(&mut batch).await {
-                        println!("writer error: {}", err);
+                        error!("writer error: {}", err);
                         break;
                     }
                 }
             };
             tokio::spawn(handler);
-            println!("spawn new connection");
+            info!("spawn new connection");
         });
     }
 }

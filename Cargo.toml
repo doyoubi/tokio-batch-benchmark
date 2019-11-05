@@ -17,3 +17,6 @@ tokio-batch = { git = "https://github.com/doyoubi/tokio-batch", branch = "Replac
 futures-preview = { version = "0.3.0-alpha.19" }
 futures-timer = "1.0.2"
 clap = "2.33.0"
+pin-utils = "0.1.0-alpha.4"
+env_logger = "0.6.0"
+log = "0.4"

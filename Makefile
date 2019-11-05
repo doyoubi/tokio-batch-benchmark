@@ -2,13 +2,13 @@ build:
 	cargo build --release
 
 nobatch:
-	target/release/redis-ping-pong-server
+	RUST_LOG=redis_ping_pong_server=info target/release/redis-ping-pong-server
 
 max:
-	target/release/redis-ping-pong-server -m max --buf 50 --max 20
+	RUST_LOG=redis_ping_pong_server=info target/release/redis-ping-pong-server -m max --buf 50 --max 20
 
 minmax:
-	target/release/redis-ping-pong-server -m minmax --buf 50 --min 20 --max 500
+	RUST_LOG=redis_ping_pong_server=info target/release/redis-ping-pong-server -m minmax --buf 50 --min 20 --max 500
 
 build-debug:
 	cargo build
